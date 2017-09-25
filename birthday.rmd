@@ -1,0 +1,240 @@
+---
+title: "Birthday"
+author: "Rex Macey"
+date: "September 24, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction   
+In a room of n people, what's the probability that 1 or more people share a birthday?  As we will see, the probability is higher than people usually think.  In fact, with about 23 people (n=23) the answer is about 50%.  
+
+The purpose of this exercise is to show how one can arrive at the answer with virtually no knowledge of statistics by using simulation.  That will be easy.  Along the way we'll demonstrate some good (and bad) programming practices and skills.
+
+We'll go even further to show that we can even get a feel for how close our estimate might be to the real value.
+
+## Start Simple   
+Let's  start with the assumptions:
+* 365 days in a year (ignore leap years)
+* n=23 (23 people in a room)
+* Assume every day has the same probability of birth
+
+## Describing a manual (without a computer) simulation 
+Imagine a bowl with 365 slips of paper containing the integers 1, 2 3, ... 365.  We pick a slip of paper from the bowl, write the number down, and but the slip back into the bowl. This is called sampling with replacement.  We do this a total of 23 times. We then see if any of the 23 numbers match.  All these steps together are a 'trial' in the language of simulation. If there are one or more matches, we'll assign a value of 1 to the trial. If there are no matches, we'll say it's a zero.  
+
+A trial represents having 23 people in a room and asking for their birthday which is represented by an integer from 1 to 365.  If there is at least one match, we have a value of 1. If there are no matches, the value is 0.  
+
+Let's say we repeat the trial a large number of times, such as 10,000. That would take a while for one person (but it would be quick if we had 10,000 people each do 1 trial simultaneously). We sum the results of all the trials (all the zeros and ones).  Let's say we had 4900 ones and 5100 zeros. From this exercise we'd estimate that there is a probability of 4900/10000 (49%) that two or more people in a room of 23 will share a birthday.  
+
+Let's have the computer do this and see what estimate it comes up with.  To understand the code, we'll take it step-by-step showing what some of the commands do.  Remember, '<-' is the assignment operator.  So n <- 23 assigns 23 to the variable n.  Also, the ':' operator generates a sequence.  For example 1:10 will generate the sequence from 1 to 10 such as `r 1:10`.
+
+## A Single Trial By the Computer   
+To create a single trial, we only need a few lines of code
+```{r simple_single_tria}
+# generate 23 random number between 1 and 365 inclusive sampling with replacement
+birthdays <- sample(1:365,23,repl=TRUE)
+birthdays # disply the result which are 23 number from 1 to 365
+# Remove the duplicates, keeping the unique elements
+unique_days <- unique(birthdays)
+unique_days
+# count the number of unique days
+n_unique <- length(unique_days)
+n_unique
+# Return TRUE (meaning a match) if the number is less than 23.
+# If the number equals 23, then the result will be FALSE indicating all the birthdays 
+# were unique and there were no matches.
+# In R, TRUE has a value of 1 and FALSE has a value of 0.
+result <- n_unique < 23
+result
+```
+
+## Putting the trial into a function   
+The code above works and is useful to illustrate one trial.  Now we are going to put the code into a function.  A function can be thought of as a black box.  Some inputs, called parameters, are put in and transformed in some way and then the result is returns.  For example, the '+' operator can be thought of as a function.  Put in two numbers and they are added and the sum is returned.  
+
+There are several advantages of using functions:   
+* Functions are easy to call over and over.  We'll want to call ours thousands of times.  It's better to call a function over and over than to copy and paste the code over and over.   
+* We can add flexibility by parametizing functions.  In our example, we have used 23 people and 365 days.  What if we want to use a different number of people? We'll use parameters which are input variables to make this easier.
+* Functions can be saved and used by different programs saving the effort of having to rewrite code.
+
+```{r trial_function}
+# the following defines a function called trial_function which takes a value 'n' which 
+# represents the number of people in a room
+trial_function <- function(n){
+    # just like the code above, but we've used variables for daysinayear and number of people 
+    # in a room
+    birthdays <- sample(1:365,n,repl=TRUE)
+    # similar to the code in our example but we've combined two statements
+    n_unique <- length(unique(birthdays))
+    return(n_unique < n)
+}
+# Now let's call (i.e., run) our trial_function five times and see what we get.  
+# In each case we will stick with 23 people.
+trial_function(23)
+trial_function(23)
+trial_function(23)
+trial_function(23)
+trial_function(23)
+
+# The built-in replicate function is an easy way to call a function repeatedly.  
+# Here are another 5 calls to the trial_function:
+replicate(5,trial_function(23))
+```
+Having  a set of TRUE and FALSE values isn't exactly what we want.  Recall that TRUE is the same as 1 and FALSE is the same as 0.  We want to sum the values in the set and divide by the number of values so we have a probability.  We might as well multiply by 100 to put the value into an easier to read percentage format.
+
+To do this we'll create a simulate_function with calls our trial_function as many times as we want. The number of times will be a variable called ntrials.  
+
+```{r simulate_function}
+simulate_function <- function(n, ntrials=1000){
+# The following one line does everything we need. Replicate calls the trial function
+# ntrials times.  Sum totals all the TRUES (1) and FALSES (0).  The sum is divided
+# by the number of trials and the result is multiplied by 100
+    return(100*(sum(replicate(ntrials,trial_function(n)))/ntrials))
+}
+```
+## The Answer Please   
+So what's the probability that with 23 people in a room that two or more people will share a birthday? The following line will give us an estimate in percent.   
+```{r simulation_1}
+simulate_function(23,10000)
+```
+
+All we needed to find that out were the few lines of code in the trial_function and simulate_function.  Pretty powerful and pretty easy.
+
+## A More Generalized Result   
+Let's consider different number of people in the room. We'll consider n from 1 to 100 even though the probability when n is 1 is zero.  We're going to do this using two methods. The first method is a 'for' loop.  Further we are going to plot the result so we will store the 100 probabilities in a vector called vec365.  So it will run faster, we'll just use 1000 trials in the simulations. That will introduce some error which we'll address later.
+
+```{r for_loop}
+vec365 <- numeric(100) # This creates our vector with a length of 100
+for (i in 1:100){
+    vec365[i] <- simulate_function(i,1000)
+}
+vec365
+```
+
+Based on the simulation we confirm our early assertion that the probability of two or more people sharing a birthday is about 50% when the number of people is 23.  We also see there's near certainty of a shared birthday when n approaches 70.  
+
+The following code produces the same result as the for loop but requires less code and runs faster.  After the percentages are printed, we graph the result.
+
+```{r sapply_example}
+    vec365 <- sapply(1:100, function(x) simulate_function(x,1000))
+    vec365
+```
+
+## Dealing with Randomness (some trivia)
+If you look, you'll notice that the results are similar, but not exactly the same.  That's due to randomness.  If I randomly pick a bunch of integers from 1 to 10, the average should be 5.5 but it won't always be. Our process doesn't really generate truly random numbers. It produces something close which are called pseudo-random numbers.  You can thing of a PC as a book with millions of random numbers. When you ask for a random number, unless you tell it otherwise, it will start on a page number related to the date and time.  Often this is good enough.  But sometimes, we may want to generate the same set of random numbers.  This might be useful for debugging (finding problems in a program).  A program that generates different results everytime can be hard to debug.  Also, for research we might want to reproduce our result.  To generate the same set of random number, we first use a statement set.seed(seed) where the seed can be thought of as the page in the book where we want to start. If we start in the same place, we'll get the same results. 
+
+To demonstrate, we'll calculate the 1 to 100 people probabilityes two more times without setting the seed and see that the results vary.
+
+```{r noseed_example}
+# First call, no seed set
+sapply(1:100, function(x) simulate_function(x,1000))
+# Second call, no seed set
+sapply(1:100, function(x) simulate_function(x,1000))
+```
+
+Now we'll set the seed each time and the results will be identical.
+
+```{r seed_example}
+# First call, seed set
+set.seed(1)
+sapply(1:100, function(x) simulate_function(x,1000))
+# Second call, seed set
+set.seed(1)
+sapply(1:100, function(x) simulate_function(x,1000))
+```
+
+# Ploting the result
+```{r vect365_plot}
+set.seed(1)
+vec365 <- sapply(1:100, function(x) simulate_function(x,1000))
+plot(vec365, col="blue",main="P(2 or more birthdays) based on 1000 trials",
+     xlab="Numnber of People in the Room",ylab = "Probability")
+abline(h=50) # add a horizontal line at 50
+```
+
+## What about Leap years?     
+Leap years add a complication. We'll be picky and assume that someone born on February 29th of a leap year only matches someone else born on February 29th of a leap year and does not match someone born on Feb 28 or Mar 1 of a non-Leap year.  We can't just assume 366 days instead of 365 in our function.  We will assume every four years is a leap year.  That's not actually true. 
+
+Here's some trivia which we'll ignore (so you can skip this paragraph).  Every year evenly divisible by 4 IS a leap year except for years evenly divisible by 100 unless it is evenly divisble by 400.  So 1996 is a leap year.  1800 and 1900 are not leap years, while 2000 and 2400 are leap years. For our purposes every 4th year is a leap year.   
+
+To handle leap years, consider a 4 year period. 365 days occur 4x in 4 years and the leap day (Feb 29) occurs once given a total of 4`\*`365 + 1 = 1461 days.  So we need 365 days to have a 4/1461 chance and 1 day to have a 1/1461 chance.       
+
+In our previous trial function, every one of the 365 days had the same probability of a birth occuring.  We used the statement 'sample(1:365,n,repl=TRUE)'. We can create a more accurate function using the statement 'sample(1:366,n,repl=TRUE,prob=c(rep(4/1461,365),1/1461))' where the prob is set to a vector of which the first 365 values are 4/1461 and the 366th is 1/1461. 'rep' replicates 4/1461 365 times. The c() function concatenates those 365 values with 1/1461.
+
+So let's rewrite our trial function to handle leap years and call it leap_trial.  We'll rewrite the simulate function and call is leap_simulate.
+
+```{r leap_trial}
+leap_trial <- function(n){
+    birthdays <- sample(1:366,n,repl=TRUE,prob=c(rep(4/1461,365),1/1461))
+    # similar to the code in our example but we've combined two statements
+    n_unique <- length(unique(birthdays))
+    return(n_unique < n)
+} 
+leap_simulate <- function(n, ntrials=1000){
+# The following one line does everything we need. Replicate calls the trial function
+# ntrials times.  Sum totals all the TRUES (1) and FALSES (0).  The sum is divided
+# by the number of trials and the result is multiplied by 100
+    return(100*(sum(replicate(ntrials,leap_trial(n)))/ntrials))
+}
+```
+
+Now we'll calcuate the probabilities for 1 to 100 people sharing a birthday using leap year and plot the results against those we already generated assuming a 365 day year. 
+
+```{r plot366}
+set.seed(1)
+vec366 <- sapply(1:100, function(x) leap_simulate(x,1000))
+plot(vec365, col="blue",main="P(2 or more birthdays) based on 1000 trials",
+     xlab="Numnber of People in the Room",ylab = "Probability", pch=0)
+abline(h=50) # add a horizontal line at 50
+points(vec366, col="red",pch=1)
+legend("topleft",legend=c("365 days","Leap Year"), col=c("blue","red"),pch=c(0,1))
+```
+
+Intuitively we'd expect the probabilities including the leap day to be lower than those excluding the 366th day every 4 years.  In the chart, the values are hard to distinguish because they are so close.
+
+## What about Variation?  
+In this exercise we run 1000 trials.  We've seen some variation in the estimates (given the same number of people in a room).  Let's focus on the estimates using the leap year.  With 23 people in a room, our first 1000 trials generated an estimate of `r round(vec366[23],1)`%. To get a feel for the error, let's generate 1000 such estimates (23 people in a room using 1000 trials).  Below we show summary statistics and plots for the 100 results. (Yes, we are repeating the trials 1 million times = 1000 trials x 1000 simulations)
+
+```{r estimates_1000}
+set.seed(1)
+est1000 <- replicate(1000,leap_simulate(23,1000))
+summary(est1000)
+hist(est1000,main="Histogram of 1000 Estimates where n=23 and nTrials=1000",xlab="Probability",col="blue")
+boxplot(est1000,main="Boxplot of 1000 Estimates where n=23 and nTrials=1000",col="blue",
+        ylab="Probability")
+
+```
+The mean is `r round(mean(est1000),2)` and the standard deviation is `r round(sd(est1000),2)`.  A statistician might use this information to estimate what's called a 90% confidence interval. A simple way is to take the 5th and 95th percentiles. Here's a confidence interval.
+```{r confint_1000}
+# The range encompassing 90% of our sample is:
+quantile(est1000,c(0.05,.95))
+# A statistical estimate of the 90% confidence interval
+c(mean(est1000)-qnorm(0.9)*sd(est1000),mean(est1000)+qnorm(0.9)*sd(est1000))
+```
+
+Intuitively if we run more trials, say ntrials=5000 instead of 1000, we might expect less variation in our result. So let's run 1000 simulations where ntrials=5000. And see the results.
+
+```{r estimates_5000}
+set.seed(1)
+est5000 <- replicate(1000,leap_simulate(23,5000))
+summary(est5000)
+hist(est5000,main="Histogram of 1000 Estimates where n=23 and nTrials=5000",xlab="Probability",col="blue")
+boxplot(est5000,main="Boxplot of 1000 Estimates where n=23 and nTrials=5000",col="blue",
+        ylab="Probability")
+```
+
+To be clear, the ntrial=5000 produces better estimates than the ntrial=1000 in that the distribution is closer to the mean for the ntrial=5000 and the ntrial=1000. Therefore we have more confidence in the mean.  Here are the summaries for both:
+
+```{r summaries_5000_vs_1000}
+# Summary of ntrial=1000
+summary(est1000)
+# Summary of ntrial=1000
+summary(est5000)
+```
+
+## Conclusion   
+We've seen how we can use the brute force of the computer and the power of R to answer a question which is statistically difficult (particularly when you add the complexity of a leap year).  We've seen how we can get an idea of the accuracy of our answer.  We've created a number of different plots to visualize the data.  
